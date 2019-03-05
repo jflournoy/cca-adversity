@@ -22,7 +22,7 @@ make_fake_data <- function(N, j_X, k_Y){
 }
 
 set.seed(9929) #so that output is the same
-somedata <- make_fake_data(300, 40, 19*18/2)
+somedata <- make_fake_data(300, 8, 19*18/2)
 X <- somedata$X # pretend each is a self report item
 Z <- somedata$Z # pretend each is a connectivity value
 
@@ -49,12 +49,32 @@ system.time(acca <- CCA.permute(X, Z, typex = 'standard', typez = 'standard', np
 print(acca)
 plot(acca)
 
-acca2 <- CCA(X, Z, typex = 'standard', typez = 'standard', 
-             penaltyx = acca$bestpenaltyx,
-             penaltyz = acca$bestpenaltyz,
-             K = 5)
 
-print(acca2)
+permute_k_CCs <- function(X, Z, K = 1, ...){
+  nrow <- dim(X)[1]
+  i <- sample(1:nrow)
+  acc <- CCA(X[i, ], Z, K = K, trace = F, ...)
+  return(acc$cors)
+}
+cc_with_null <- function(X, Z, K = 1, iter = 100, ...){
+  acc <- CCA(X, Z, K = K, ...)
+  f <- function(){
+    permute_k_CCs(X, Z, K = K, ...)
+  }
+  acc.perm <- replicate(iter, f())
+  return(list(CCA = acc, cors.perm = acc.perm))
+}
 
+acca2 <- cc_with_null(X, Z, K = 2, iter = 1000,
+                      typex = 'standard', typez = 'standard', 
+                      penaltyx = acca$bestpenaltyx,
+                      penaltyz = acca$bestpenaltyz)
+print(acca2$CCA)
+
+par(mfrow = c(1,2))
+hist(acca2$cors.perm[1,], breaks = 25)
+abline(v = acca2$CCA$cors[1])
+hist(acca2$cors.perm[2,], breaks = 25)
+abline(v = acca2$CCA$cors[2])
 #Show out-of-sample prediction performance
 #Calculate p-value of this procedure
