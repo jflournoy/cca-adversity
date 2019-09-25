@@ -1,0 +1,7 @@
+To get Power spheres from 2009c 1mm space to standard 6th gen MNI152 2mm space:
+
+
+3dresample -master [file path to 2mm MNI 6th gen] -prefix power_drysdale_spheres_mni125_2mm.nii -input power_drysdale_spheres.nii
+
+>> output is power_drysdale_spheres_mni125_2mm.nii
+>> "master" is the voxel size it will match to
