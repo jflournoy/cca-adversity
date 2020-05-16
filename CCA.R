@@ -15,9 +15,11 @@ if (!require("candisc")) {install.packages("candisc"); require("candisc")}
 
 DT_data <- read_sav("/Users/katherinegrisanzio/Dropbox/Harvard/CCA/Questionnaire SPSS Data/DT_CHILD_PARENT_MASTER.sav")
 MT_data <- read_sav("/Users/katherinegrisanzio/Dropbox/Harvard/CCA/Questionnaire SPSS Data/MT_BASELINE_CHILD_PARENT_MASTER.sav")
+age_data <- read_sav("/Users/katherinegrisanzio/Dropbox/Harvard/CCA/Questionnaire SPSS Data/DT_SESSION_AGES.sav")
 
-#write.csv(DT_data, "DT_data.csv")
-#write.csv(MT_data, "MT_data.csv")
+sub_list_DT <- read.csv("/Users/katherinegrisanzio/Dropbox/CCA-Adversity/SubjectLists/Rest_DT-CCA_n118.csv")
+sub_list_MT <- read.csv("/Users/katherinegrisanzio/Dropbox/CCA-Adversity/SubjectLists/Rest_MT-CCA_n120.csv")
+
 
 ##---------DT Data-------
 
@@ -422,12 +424,15 @@ mri_df_all <- data.frame(df_wide)
 
 ##---------Select resting state features-------
 
-# Retain participants who have both imaging and behavioral data
-df <- base::merge(behavioral_df_all, mri_df_all, by = "ID", all = FALSE) # merging to identify participants who have both behavioral and imaging data
-df_id_list <- df[1] # ID list of participants with imaging and behavioral data
+# Retain participants who have clean scan data from Steph's QC
+sub_list <- rbind(sub_list_DT, sub_list_MT)
+names(sub_list)[1] <- "ID"
 
-behavioral_df <- merge(behavioral_df_all, df_id_list, by = "ID", all = FALSE) # final behavioral dataframe
-mri_df <- merge(mri_df_all, df_id_list, by = "ID", all = FALSE) # final imaging dataframe
+behavioral_df <- merge(behavioral_df_all, sub_list, by = "ID", all = FALSE) # final behavioral dataframe
+mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final imaging dataframe
+  # the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
+  # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
+  # of the two datasets to be the same (N=236)
 
 
 ## Drysdale (2017) and Dinga (2019) method
@@ -442,18 +447,13 @@ mri_df <- merge(mri_df_all, df_id_list, by = "ID", all = FALSE) # final imaging 
 # correlation with any of the 17 IDS symptoms to preserve the same feature 
 # to subjects ratio (80% of 187 subjects).
 
-select_features <- function(X, Y, n_selected_vars){
+select_features_drysdale <- function(X, Y, n_selected_vars){
   correlations <- cor(Y, X, method = "spearman")
   correlations <- apply(correlations, 2, function(x){max(abs(x))})
   corr.threshold <- sort(correlations, decreasing = T)[n_selected_vars]
   selected.X <- correlations >= corr.threshold
   selected.X <- X[,selected.X]
 }
-
-total_n <- 256
-n_selected_vars <- round(.80*total_n)
-
-selected_rs_features <- select_features(mri_df[2:ncol(mri_df)], behavioral_df[2:ncol(behavioral_df)], n_selected_vars)
 
 
 ## Xia et al. (2018) method
@@ -464,17 +464,47 @@ selected_rs_features <- select_features(mri_df[2:ncol(mri_df)], behavioral_df[2:
 # absolute deviation, which is more robust against outliers than standard 
 # deviation.
 
-
-select_features2 <- function(X, n_selected_vars2){
+select_features_xia <- function(X, Y, n_selected_vars){
   mads <- apply(X, 2, mad)
-  mads.threshold <- sort(mads, decreasing = T)[n_selected_vars2]
+  mads.threshold <- sort(mads, decreasing = T)[n_selected_vars]
   selected.X <- mads >= mads.threshold
   selected.X <- X[,selected.X]
 }
 
-n_selected_vars2 <- round(.10*(ncol(mri_df)-1)) # -1 to exclude the ID col
 
-selected_rs_features2 <- select_features2(mri_df[2:ncol(mri_df)], n_selected_vars2)
+# Select features + CCA function
+
+select_and_cca_fit <- function(X, Y, n_selected_vars, selection_function){
+  #select features
+  selected.X <- selection_function(X, Y, n_selected_vars)
+  #cca fit with best penalty
+  system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', nperms = 100))
+  permute_k_CCs <- function(Y, selected.X, K = 1, ...){
+    nrow <- dim(Y)[1]
+    i <- sample(1:nrow)
+    acc <- CCA(Y[i, ], selected.X, K = K, trace = F, ...)
+    return(acc$cors)
+  }
+  cc_with_null <- function(Y, selected.X, K = 1, iter = 100, ...){
+    acc <- CCA(Y, selected.X, K = K, ...)
+    f <- function(){
+      permute_k_CCs(Y, selected.X, K = K, ...)
+    }
+    acc.perm <- replicate(iter, f())
+    return(list(CCA = acc, cors.perm = acc.perm))
+  }
+  acca2 <- cc_with_null(Y, selected.X, K = 5, iter = 1000,
+                        typex = 'standard', typez = 'standard', 
+                        penaltyx = acca$bestpenaltyx,
+                        penaltyz = acca$bestpenaltyz)
+  print(acca2$CCA, verbose = TRUE)
+  return(list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), cca_cors = acca2$CCA$cors, loadings = c(acca2$CCA$u, acca2$CCA$v)))
+}
+
+total_n <- 236
+
+cca_output_drysdale <- select_and_cca_fit(X = mri_df[2:ncol(mri_df)], Y = behavioral_df[2:ncol(behavioral_df)], n_selected_vars = round(.80*total_n), selection_function = select_features_drysdale)
+cca_output_xia <- select_and_cca_fit(X = mri_df[2:ncol(mri_df)], Y = behavioral_df[2:ncol(behavioral_df)], n_selected_vars = round(.10*(ncol(mri_df)-1)), selection_function = select_features_xia) # -1 to exclude the ID col; Y isn't used here
 
 
 ##---------CCA-------
@@ -644,4 +674,38 @@ myfiles <- do.call(rbind, lapply(files, function(x){
   pnumber <- gsub("_.*", "", files)
   df$id <- pnumber
 }))
+
+
+
+# Original select and fit cca function
+select_and_cca_fit <- function(X, Y, n_selected_vars){
+  #select features
+  correlations <- cor(Y, X, method = "spearman")
+  correlations <- apply(correlations, 2, function(x){max(abs(x))})
+  corr.threshold <- sort(correlations, decreasing = T)[n_selected_vars]
+  selected.X <- correlations >= corr.threshold
+  selected.X <- X[,selected.X]
+  #cca fit with best penalty
+  system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', nperms = 100))
+  permute_k_CCs <- function(Y, selected.X, K = 1, ...){
+    nrow <- dim(Y)[1]
+    i <- sample(1:nrow)
+    acc <- CCA(Y[i, ], selected.X, K = K, trace = F, ...)
+    return(acc$cors)
+  }
+  cc_with_null <- function(Y, selected.X, K = 1, iter = 100, ...){
+    acc <- CCA(Y, selected.X, K = K, ...)
+    f <- function(){
+      permute_k_CCs(Y, selected.X, K = K, ...)
+    }
+    acc.perm <- replicate(iter, f())
+    return(list(CCA = acc, cors.perm = acc.perm))
+  }
+  acca2 <- cc_with_null(Y, selected.X, K = 5, iter = 1000,
+                        typex = 'standard', typez = 'standard', 
+                        penaltyx = acca$bestpenaltyx,
+                        penaltyz = acca$bestpenaltyz)
+  print(acca2$CCA, verbose = TRUE)
+  return(list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), cca_cors = acca2$CCA$cors))
+}
 
