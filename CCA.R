@@ -158,8 +158,18 @@ ceca_df[, grepl('mfig|ffig', colnames(ceca_df))] <- reverse.code(keys_ceca, ceca
 ceca_df[ceca_df[, grepl('use_\\d', colnames(ceca_df))] %in% 99] <- NA
 
 
+### HOME
+
+# Extract all HOME variables
+home_vars <- colnames(DT_data)[grepl('home_\\d', colnames(DT_data))] 
+home_df <- DT_data[home_vars]
+
+# Convert "N/A or Prefer not to Answer" values (coded as 999) to NAs
+home_df[home_df == 999] <- NA
+
+
 # Can use cbind to merge the datasets
-DT_data_final <- cbind(ucla_df, vexr_df, jvq_df, cts_fam_df, ctq_df, ceca_df)
+DT_data_final <- cbind(ucla_df, vexr_df, jvq_df, cts_fam_df, ctq_df, ceca_df, home_df)
 
 # Add back in subject ID variable for DT
 row.names(DT_data_final) <- DT_data$id
@@ -306,10 +316,19 @@ ceca_df_MT[, grepl('mfig|ffig', colnames(ceca_df_MT))] <- reverse.code(keys_ceca
 ceca_df_MT[ceca_df_MT[, grepl('use_\\d', colnames(ceca_df_MT))] %in% 99] <- NA
 
 
+### HOME
+
+# Extract all HOME variables
+home_vars_MT <- colnames(MT_data)[grepl('home_\\d', colnames(MT_data))] 
+home_df_MT <- MT_data[home_vars_MT]
+
+# Convert "N/A or Prefer not to Answer" values (coded as 999) to NAs
+home_df_MT[home_df_MT == 999] <- NA
+
 ##---------Combining MT and DT adversity measures-------
 
 # Can use cbind to merge the datasets
-MT_data_final <- cbind(ucla_df_MT, vexr_df_MT, jvq_df_MT, cts_fam_df_MT, ctq_df_MT, ceca_df_MT)
+MT_data_final <- cbind(ucla_df_MT, vexr_df_MT, jvq_df_MT, cts_fam_df_MT, ctq_df_MT, ceca_df_MT, home_df_MT)
 
 # Add back in subject ID variable for MT
 row.names(MT_data_final) <- MT_data$ID
