@@ -1,7 +1,31 @@
 # CCA Analysis Questionnaire Coding
-# Katherine Grisanzio
-# 5/15/19
+# Katherine Grisanzio & John Flournoy
 
+NCPU = as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE')) #How many CPUS we have to run this chunk
+TASK_ID = as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID')) #This chunk's number
+MAX_TASKS = as.numeric(Sys.getenv('SLURM_ARRAY_TASK_MAX')) #How many total chunks this has been split up into
+#MAX_TASKS=3
+#TASK_ID=2
+
+if(!file.exists('data/permute_index.rds')){
+  stop('Please generate the permutations using `generate_permutations.R`.')
+} else {
+  permutations <- readRDS('data/permute_index.rds')
+  if(any(is.na(c(NCPU, TASK_ID, MAX_TASKS)))){
+    message('Not running on NCF, setting small values for test purposes')
+    NCPU = 10
+    fname = file.path('data', 'test.rds')
+    permutations_i <- 1:10
+  } else {
+    message('Running on NCF.
+Using ', NCPU, ' cores.
+This is chunk ', TASK_ID,' of ', MAX_TASKS, '.')
+    fname = file.path('data', paste0('cca_perms-chunk_', TASK_ID, '.rds'))
+    message('Output filename: ', fname)
+    permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[TASK_ID]]
+    message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
+  }
+}
 
 ##---------Load packages and import data-------
 
@@ -25,6 +49,9 @@ mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final im
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
   # of the two datasets to be the same (N=236)
 
+if(var(c(dim(permutations)[[2]], dim(mri_df)[[1]], dim(behavioral_df)[[1]])) > 0){
+  stop('Dimensions of data and/or permutations are not the same.')
+}
 
 ## Drysdale (2017) and Dinga (2019) method
 
@@ -64,40 +91,54 @@ select_features_xia <- function(X, Y, n_selected_vars){
 
 # Select features + CCA function
 
-select_and_cca_fit <- function(X, Y, n_selected_vars, selection_function){
+select_and_cca_fit <- function(X, Y, K, n_selected_vars, selection_function){
   #select features
   selected.X <- selection_function(X, Y, n_selected_vars)
   #cca fit with best penalty
-  system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', nperms = 100))
-  permute_k_CCs <- function(Y, selected.X, K = 1, ...){
-    nrow <- dim(Y)[1]
-    i <- sample(1:nrow)
-    acc <- CCA(Y[i, ], selected.X, K = K, trace = F, ...)
-    return(acc$cors)
-  }
-  cc_with_null <- function(Y, selected.X, K = 1, iter = 100, ...){
-    acc <- CCA(Y, selected.X, K = K, ...)
-    f <- function(){
-      permute_k_CCs(Y, selected.X, K = K, ...)
-    }
-    acc.perm <- replicate(iter, f())
-    return(list(CCA = acc, cors.perm = acc.perm))
-  }
-  acca2 <- cc_with_null(Y, selected.X, K = 5, iter = 1000,
-                        typex = 'standard', typez = 'standard', 
-                        penaltyx = acca$bestpenaltyx,
-                        penaltyz = acca$bestpenaltyz)
-  print(acca2$CCA, verbose = TRUE)
-  return(list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), cca_cors = acca2$CCA$cors, loadings = c(acca2$CCA$u, acca2$CCA$v)))
+  penalties = seq(0, 1, length.out = 20) #This covers the whole range pretty well, though maybe overkill
+  system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', 
+                                  penaltyxs = penalties, penaltyzs = penalties,
+                                  nperms = 1000, trace = FALSE))
+  acca2 <- CCA(Y, selected.X, K = K,
+               typex = 'standard', typez = 'standard', 
+               penaltyx = acca$bestpenaltyx,
+               penaltyz = acca$bestpenaltyz, 
+               trace = FALSE)
+  return(list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), 
+              cca_cors = acca2$cors))
 }
 
 total_n <- dim(mri_df)[1]
 
-cca_output_drysdale <- select_and_cca_fit(X = mri_df[2:ncol(mri_df)], 
-                                          Y = behavioral_df[2:ncol(behavioral_df)], 
-                                          n_selected_vars = round(.80*total_n), 
-                                          selection_function = select_features_drysdale)
-cca_output_xia <- select_and_cca_fit(X = mri_df[2:ncol(mri_df)], 
-                                     Y = behavioral_df[2:ncol(behavioral_df)], 
-                                     n_selected_vars = round(.10*(ncol(mri_df)-1)), 
-                                     selection_function = select_features_xia) # -1 to exclude the ID col; Y isn't used here
+message('Creating cluster with ', NCPU, ' cores...')
+cl <- parallel::makePSOCKcluster(NCPU)
+message('Exporting data to cluster nodes...')
+parallel::clusterExport(cl = cl, 
+                        varlist = c('mri_df', 'behavioral_df', 'total_n',
+                                    'select_features_drysdale', 'permutations',
+                                    'select_and_cca_fit'))
+message('Running permutations...')
+system.time({
+  rez <- parallel::parLapply(
+    cl = cl, X = permutations_i, 
+    fun = function(i){
+      library(PMA)
+      perm <- permutations[i,]
+      cca_output_drysdale <- select_and_cca_fit(X = mri_df[perm, 2:ncol(mri_df)],
+                                                Y = behavioral_df[,2:ncol(behavioral_df)],
+                                                K = 10,
+                                                n_selected_vars = round(.80*total_n),
+                                                selection_function = select_features_drysdale)
+      return(cca_output_drysdale)
+    })
+})
+parallel::stopCluster(cl)
+
+saveRDS(rez, fname)
+
+# cca_output_xia <- select_and_cca_fit(X = mri_df[2:ncol(mri_df)], 
+#                                      Y = behavioral_df[2:ncol(behavioral_df)], 
+#                                      n_selected_vars = round(.10*(ncol(mri_df)-1)), # -1 to exclude the ID col; Y isn't used here
+#                                      selection_function = select_features_xia) 
+
+
