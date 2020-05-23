@@ -6,6 +6,7 @@ TASK_ID = as.numeric(Sys.getenv('SLURM_ARRAY_TASK_ID')) #This chunk's number
 MAX_TASKS = as.numeric(Sys.getenv('SLURM_ARRAY_TASK_MAX')) #How many total chunks this has been split up into
 #MAX_TASKS=3
 #TASK_ID=2
+SELECTION = 'drysdale'
 
 if(!file.exists('data/permute_index.rds')){
   stop('Please generate the permutations using `generate_permutations.R`.')
@@ -20,13 +21,15 @@ if(!file.exists('data/permute_index.rds')){
     message('Running on NCF.
 Using ', NCPU, ' cores.
 This is chunk ', TASK_ID,' of ', MAX_TASKS, '.')
-    fname = file.path('data', paste0('cca_perms-chunk_', TASK_ID, '.rds'))
+    fname = file.path('data', paste0('cca_perms-', SELECTION, '-chunk_', TASK_ID, '.rds'))
     message('Output filename: ', fname)
     permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[TASK_ID]]
     message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
   }
 }
-
+if(file.exists(fname)){
+    stop(paste0('Output ', fname, ' already exists. Stopping.'))
+}
 ##---------Load packages and import data-------
 
 if (!require("PMA")) {install.packages("PMA"); require("PMA")}
@@ -91,21 +94,25 @@ select_features_xia <- function(X, Y, n_selected_vars){
 
 # Select features + CCA function
 
-select_and_cca_fit <- function(X, Y, K, n_selected_vars, selection_function){
+select_and_cca_fit <- function(X, Y, K, n_selected_vars, selection_function, return_cca_object = FALSE, nperms = 1000){
   #select features
   selected.X <- selection_function(X, Y, n_selected_vars)
   #cca fit with best penalty
   penalties = seq(0, 1, length.out = 20) #This covers the whole range pretty well, though maybe overkill
   system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', 
                                   penaltyxs = penalties, penaltyzs = penalties,
-                                  nperms = 1000, trace = FALSE))
+                                  nperms = nperms, trace = FALSE))
   acca2 <- CCA(Y, selected.X, K = K,
                typex = 'standard', typez = 'standard', 
                penaltyx = acca$bestpenaltyx,
                penaltyz = acca$bestpenaltyz, 
                trace = FALSE)
-  return(list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), 
-              cca_cors = acca2$cors))
+  rez <- list(penalty = c(acca$bestpenaltyx, acca$bestpenaltyz), 
+              cca_cors = acca2$cors)
+  if(return_cca_object){
+    rez <- c(list(cca_obj = acca2, cca.permute_obj = acca), rez)
+  }
+  return(rez)
 }
 
 total_n <- dim(mri_df)[1]
@@ -141,4 +148,12 @@ saveRDS(rez, fname)
 #                                      n_selected_vars = round(.10*(ncol(mri_df)-1)), # -1 to exclude the ID col; Y isn't used here
 #                                      selection_function = select_features_xia) 
 
-
+if(FALSE){
+  cca_rez <- select_and_cca_fit(X = mri_df[,2:ncol(mri_df)],
+                                Y = behavioral_df[,2:ncol(behavioral_df)],
+                                K = 10,
+                                n_selected_vars = round(.80*total_n),
+                                selection_function = select_features_drysdale,
+                                return_cca_object = TRUE)
+  saveRDS(cca_rez, file.path('data', paste0('cca-', SELECTION, '.rds')))
+}

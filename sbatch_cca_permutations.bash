@@ -7,7 +7,7 @@
 #SBATCH --mail-type=END,FAIL
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=48
-#SBATCH --mem=40G
+#SBATCH --mem=80G
 module load gcc/7.1.0-fasrc01
 module load R/3.5.1-fasrc01
 

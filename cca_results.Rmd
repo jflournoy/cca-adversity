@@ -1,0 +1,73 @@
+---
+title: "CCA Results"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    code_folding: hide
+---
+
+```{r setup, include=FALSE}
+library(ggplot2)
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Drysdale selection method
+
+## Load permutations
+
+```{r}
+perms_list <- lapply(dir('data', pattern = 'cca_perms-drysdale.*rds', full.names = TRUE), readRDS)
+
+#The optimal penalty for each permuted data set
+penalties <- unlist(lapply(perms_list, function(permset){
+  lapply(permset, function(aperm) unique(aperm$penalty))
+}))
+#Create a data frame with one row for each correlation for each permutation.
+#Column `k` indexes the correlation.
+null_ccs <- data.table::rbindlist(
+  lapply(perms_list, function(permset){
+    data.table::rbindlist(
+      lapply(
+        permset, 
+        function(aperm) data.frame(cc = aperm$cca_cors, k = 1:length(aperm$cca_cors))))
+  }))
+#index the permutation iteration too, just in case we want to see what penalty was used.
+null_ccs[, i := 1:.N, by = k]
+null_ccs[, mean := mean(cc), by = k]
+```
+
+## Load CCA of observed data
+
+```{r}
+cca_obsv <- readRDS(file.path('data', 'cca-drysdale.rds'))
+cca_penalty_used <- cca_obsv$cca.permute_obj$bestpenaltyx
+cc <- data.frame(cc_obs = cca_obsv$cca_obj$cors, 
+                 k = 1:length(cca_obsv$cca_obj$cors))
+#To find the Z score we just see what proportion of null CCs are less than the
+#observed CC and then use qnorm to turn that probability into a Z score. We can
+#then get a two-sided p-value for the CC using pnorm (there are other ways
+#too--we could just directly use the prop_null_lt_obs).
+Z_table <- null_ccs[cc, on = 'k'][, list(prop_null_lt_obs = mean(cc < cc_obs),
+                                         Z = qnorm(mean(cc < cc_obs)),
+                                         `P(>|Z|)` = pnorm(abs(qnorm(mean(cc < cc_obs))), lower.tail = F)*2,
+                                         cc_obs = unique(cc_obs)), by = k]
+```
+
+```{r, fig.width=5, fig.height=3, fig.cap='Distribution of penalties across permutations. Blue line indicates penalty used for unpermuted data'}
+ggplot(data.frame(penalties = penalties), aes(x = penalties)) + 
+  geom_histogram(bins = 19) + 
+  geom_vline(xintercept = cca_penalty_used, color = 'blue') + 
+  theme_minimal()
+```
+
+```{r, fig.width=10, fig.height=4,fig.cap='Density of canonical correlations (CC) on permuted data for each of 10 canonical variates in order. Lines indicate CC of unpermuted data with Z scores for their location in the null density.'}
+ggplot(null_ccs, aes(x = cc)) +
+  geom_density(fill = 'red', alpha = .5) + 
+  geom_vline(data = Z_table, aes(xintercept = cc_obs)) +
+  geom_text(data = Z_table, aes(label = sprintf('Z = %.2f', Z), x = cc_obs - .25, y = 10)) + 
+  theme_minimal() + 
+  coord_cartesian(x = c(0, 1)) + 
+  facet_wrap(~ k, ncol = 5) + 
+  labs(x = 'Canonical correlation across 10,000 permutations', y = 'Canonical variate number')
+```
