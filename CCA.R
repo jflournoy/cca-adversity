@@ -7,6 +7,7 @@ library(readr)
 
 parser <- ArgumentParser(description='Run a simulation study using permediatr')
 parser$add_argument('--nopermute', action = 'store_true', help = 'Run the CCA on the unpermuted observed data and save the result. Do not run any permutations (this CCA will not be computed on unpermuted data when running permutations).')
+parser$add_argument('--useraw', action = 'store_true', help = 'Use the un-residualized, raw data for X and Y. Otherwise, we will use data residualized on Age and Sex. (NOT YET IMPLEMENTED)')
 parser$add_argument('--selectfun', type="character", required = TRUE,
                     help = 'Selection function to use for data reduction prior to CCA. The character string given here will be postpended to the string `select_features_`. To specify the function `select_features_drysdale` use "--selectfun drysdale".')
 parser$add_argument('--maxchunks', type="integer",
