@@ -23,10 +23,8 @@ parser$add_argument('--permfile', type="character",default = 'permute_index.rds'
 parser$add_argument('--innerperms', type="integer",default = 1000,
                     help = 'Number of permutations for choosing penalty.')
 
-args <- parser$parse_args(c('--nopermute',
-                            '--selectfun', 'drysdale2',
-                            '--maxchunks', '3',
-                            '--chunkid', '1'))
+#args <- parser$parse_args(c('--selectfun', 'xia', '--chunkid', '1', '--maxchunks', '6', '--mc.cores', '10', '--innerperms', '100'))
+args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
    NCPU < as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))){
@@ -37,28 +35,6 @@ MAX_TASKS = args$maxchunks
 SELECTION = args$selectfun
 NPERMS = args$innerperms
 
-if(!file.exists('data/permute_index.rds')){
-  stop('Please generate the permutations using `generate_permutations.R`.')
-} else {
-  permutations <- readRDS('data/permute_index.rds')
-  if(any(is.na(c(NCPU, CHUNK_ID, MAX_TASKS)))){
-    message('Not running on NCF, setting small values for test purposes')
-    NCPU = 10
-    fname = file.path('data', 'test.rds')
-    permutations_i <- 1:10
-  } else {
-    message('Running on NCF.
-Using ', NCPU, ' cores.
-This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
-    fname = file.path('data', paste0('cca_perms-', SELECTION, '-chunk_', CHUNK_ID, '.rds'))
-    message('Output filename: ', fname)
-    permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[CHUNK_ID]]
-    message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
-  }
-}
-if(file.exists(fname)){
-    stop(paste0('Output ', fname, ' already exists. Stopping.'))
-}
 ##---------Load packages and import data-------
 
 behavioral_df_all <- data.frame(readr::read_csv('data/behavior_data_resid.csv'))
@@ -77,10 +53,6 @@ mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final im
   # the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
   # of the two datasets to be the same (N=236)
-
-if(var(c(dim(permutations)[[2]], dim(mri_df)[[1]], dim(behavioral_df)[[1]])) > 0){
-  stop('Dimensions of data and/or permutations are not the same.')
-}
 
 ## Drysdale (2017) and Dinga (2019) method
 
@@ -127,7 +99,7 @@ select_features_drysdale2 <- function(X, Y, n_selected_vars = NULL){
 select_features_xia <- function(X, Y, n_selected_vars = NULL){
   if(is.null(n_selected_vars)){
     total_p <- dim(X)[2]
-    round(.10*(total_p))
+    n_selected_vars <- round(.10*(total_p))
   }
   mads <- apply(X, 2, mad)
   mads.threshold <- sort(mads, decreasing = T)[n_selected_vars]
@@ -163,6 +135,31 @@ select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = 
 
 
 if(!args$nopermute){
+  if(!file.exists('data/permute_index.rds')){
+    stop('Please generate the permutations using `generate_permutations.R`.')
+  } else {
+    permutations <- readRDS('data/permute_index.rds')
+    if(any(is.na(c(NCPU, CHUNK_ID, MAX_TASKS)))){
+      message('Not running on NCF, setting small values for test purposes')
+      NCPU = 10
+      fname = file.path('data', 'test.rds')
+      permutations_i <- 1:10
+    } else {
+      message('Running on NCF.
+Using ', NCPU, ' cores.
+This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
+      fname = file.path('data', paste0('cca_perms-', SELECTION, '-chunk_', CHUNK_ID, '.rds'))
+      message('Output filename: ', fname)
+      permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[CHUNK_ID]]
+      message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
+    }
+  }
+  if(file.exists(fname)){
+    stop(paste0('Output ', fname, ' already exists. Stopping.'))
+  }
+  if(var(c(dim(permutations)[[2]], dim(mri_df)[[1]], dim(behavioral_df)[[1]])) > 0){
+    stop('Dimensions of data and/or permutations are not the same.')
+  }
   message('Creating cluster with ', NCPU, ' cores...')
   cl <- parallel::makePSOCKcluster(NCPU)
   message('Exporting data to cluster nodes...')
