@@ -165,7 +165,8 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   message('Exporting data to cluster nodes...')
   parallel::clusterExport(cl = cl, 
                           varlist = c('mri_df', 'behavioral_df',
-                                      'permutations', lsf.str()))
+                                      'permutations', 'NPERMS', 
+                                      lsf.str()))
   message('Running permutations...')
   system.time({
     rez <- parallel::parLapply(
