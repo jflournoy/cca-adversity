@@ -191,11 +191,13 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
     stop(outfile, ' exists. Will not recompute.')
   }
   message('Estimating CCA on unpermuted data...')
-  system.time({cca_rez <- select_and_cca_fit(X = mri_df[,2:ncol(mri_df)],
-                                             Y = behavioral_df[,2:ncol(behavioral_df)],
-                                             K = 10, nperms = NPERMS,
-                                             selection_function = selectfun,
-                                             return_cca_object = TRUE)})
+  system.time({
+    cca_rez <- select_and_cca_fit(X = mri_df[,2:ncol(mri_df)],
+                                  Y = behavioral_df[,2:ncol(behavioral_df)],
+                                  K = 10, nperms = NPERMS,
+                                  selection_function = selectfun,
+                                  return_cca_object = TRUE)
+  })
   message('Saving result to ', outfile)
   saveRDS(cca_rez, outfile)
   message('Done.')
