@@ -23,7 +23,7 @@ parser$add_argument('--permfile', type="character",default = 'permute_index.rds'
 parser$add_argument('--innerperms', type="integer",default = 1000,
                     help = 'Number of permutations for choosing penalty.')
 
-#args <- parser$parse_args(c('--selectfun', 'xia', '--chunkid', '1', '--maxchunks', '6', '--mc.cores', '10', '--innerperms', '100'))
+#args <- parser$parse_args(c('--selectfun', 'drysdale','--mc.cores', '10', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '100')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
