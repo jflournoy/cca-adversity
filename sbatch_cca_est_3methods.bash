@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ccaest
-#SBATCH --output=%x_%A.out
+#SBATCH --output=log/%x_%A.out
 #SBATCH --time=12:00:00
 #SBATCH --partition=ncf
 #SBATCH --mail-type=END,FAIL

@@ -1,6 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=ccaperm-drysdale
-#SBATCH --output=%x_%A_%a.out
+#SBATCH --output=log/%x_%A_%a.out
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=ncf
 #SBATCH --mail-type=END,FAIL
