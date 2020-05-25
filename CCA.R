@@ -50,7 +50,7 @@ names(sub_list)[1] <- "ID"
 
 behavioral_df <- merge(behavioral_df_all, sub_list, by = "ID", all = FALSE) # final behavioral dataframe
 mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final imaging dataframe
-  # the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
+  # Katherine: the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
   # of the two datasets to be the same (N=236)
 
@@ -116,7 +116,7 @@ select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = 
   #select features
   selected.X <- selection_function(X, Y)
   #cca fit with best penalty
-  penalties = seq(0, 1, length.out = 20) #This covers the whole range pretty well, though maybe overkill
+  penalties = seq(.1, .7, length.out = 10) #this is PMA::CCA.permute default
   system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', 
                                   penaltyxs = penalties, penaltyzs = penalties,
                                   nperms = nperms, trace = FALSE))
@@ -173,7 +173,7 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
       fun = function(i){
         library(PMA)
         perm <- permutations[i,]
-        cca_output <- select_and_cca_fit(X = mri_df[, 2:ncol(mri_df)],
+        cca_output <- select_and_cca_fit(X = mri_df[perm, 2:ncol(mri_df)],
                                          Y = behavioral_df[,2:ncol(behavioral_df)],
                                          K = 10, nperms = NPERMS,
                                          selection_function = selectfun)
@@ -192,8 +192,8 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   }
   message('Estimating CCA on unpermuted data...')
   system.time(
-    cca_rez <- select_and_cca_fit(X = mri_df[,2:ncol(mri_df)],
-                                  Y = behavioral_df[,2:ncol(behavioral_df)],
+    cca_rez <- select_and_cca_fit(X = mri_df[, 2:ncol(mri_df)],
+                                  Y = behavioral_df[, 2:ncol(behavioral_df)],
                                   K = 10, nperms = NPERMS,
                                   selection_function = selectfun,
                                   return_cca_object = TRUE)
