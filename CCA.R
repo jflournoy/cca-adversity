@@ -133,7 +133,6 @@ select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = 
   return(rez)
 }
 
-
 if(!args$nopermute){
   if(!file.exists('data/permute_index.rds')){
     stop('Please generate the permutations using `generate_permutations.R`.')
@@ -192,13 +191,13 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
     stop(outfile, ' exists. Will not recompute.')
   }
   message('Estimating CCA on unpermuted data...')
-  system.time({
+  system.time(
     cca_rez <- select_and_cca_fit(X = mri_df[,2:ncol(mri_df)],
                                   Y = behavioral_df[,2:ncol(behavioral_df)],
                                   K = 10, nperms = NPERMS,
                                   selection_function = selectfun,
                                   return_cca_object = TRUE)
-  })
+  )
   message('Saving result to ', outfile)
   saveRDS(cca_rez, outfile)
   message('Done.')
