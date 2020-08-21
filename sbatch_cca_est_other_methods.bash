@@ -12,13 +12,13 @@ module load R/3.5.1-fasrc01
 cp ~/.R/Makevars.gcc ~/.R/Makevars
 export R_LIBS_USER=/ncf/mclaughlin/users/jflournoy/R_3.5.1_GCC:$R_LIBS_USER
 
-srun -c 1 Rscript --verbose --vanilla CCA.R \
-  --nopermute \
-  --selectfun drysdale3 \
-  --mc.cores 1 \
-  --noreg
+#srun -c 1 Rscript --verbose --vanilla CCA.R \
+#  --nopermute \
+#  --selectfun drysdale3 \
+#  --mc.cores 1 \
+#  --noreg
 srun -c 1 Rscript --verbose --vanilla CCA.R \
   --nopermute \
   --selectfun nofeatsel \
   --mc.cores 1 \
-  --innerperms 25
+  --innerperms 100

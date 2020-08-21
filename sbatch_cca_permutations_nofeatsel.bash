@@ -21,4 +21,4 @@ srun -c "${cores}" Rscript --verbose --vanilla CCA.R \
   --maxchunks "${maxchunks}" \
   --chunkid "${chunkid}" \
   --mc.cores "${cores}" \
-  --innerperms 25
+  --innerperms 100
