@@ -26,7 +26,7 @@ parser$add_argument('--innerperms', type="integer",default = 1000,
 parser$add_argument('--k', type = 'integer', default = NULL, 
                     help = 'Number of canonical variate pairs. Default will use min(p,q).')
 parser$add_argument('--noreg', action = 'store_true', 
-                    help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default)')
+                    help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default).')
 
 
 #args <- parser$parse_args(c('--selectfun', 'drysdale3','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '100')) # 
@@ -140,19 +140,18 @@ select_features_xia <- function(X, Y, n_selected_vars = NULL){
 
 selectfun <- eval(parse(text = paste0('select_features_', SELECTION)))
 
-# Select features + CCA function
+#cca funcitons
 
-select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = FALSE, nperms = 1000, noreg = FALSE){
-  #select features
-  selected_features <- selection_function(X, Y)
-  selected.X <- selected_features[['X']]
-  selected.Y <- selected_features[['Y']]
-  
-  if(is.null(K)){
-    K <- min(dim(selected.X)[2], dim(selected.Y)[2])
+noreg_cca <- function(...){
+  acca <- candisc::cancor(selected.X, selected.Y, ndim = K)
+  rez <- list(penalty = NULL, cca_cors = acca$cancor)
+  if(return_cca_object){
+    rez <- c(list(cca_obj = acca, cca.permute_obj = NULL), rez)
   }
-  
-  
+  return(rez)
+}
+
+reg_cca <- function(...){
   #cca fit with best penalty
   penalties = seq(.1, .7, length.out = 10) #this is PMA::CCA.permute default
   system.time(acca <- CCA.permute(selected.Y, selected.X, typex = 'standard', typez = 'standard', 
@@ -168,6 +167,35 @@ select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = 
   if(return_cca_object){
     rez <- c(list(cca_obj = acca2, cca.permute_obj = acca), rez)
   }
+  return(rez)
+}
+
+# Select features + CCA function
+
+select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = FALSE, nperms = 1000, noreg = FALSE){
+  #select features
+  selected_features <- selection_function(X, Y)
+  selected.X <- selected_features[['X']]
+  selected.Y <- selected_features[['Y']]
+  
+  if(is.null(K)){
+    K <- min(dim(selected.X)[2], dim(selected.Y)[2])
+  } 
+  if(K > dim(selected.X)[1] & noreg){
+    stop("K is greater than number of observations. You should use regularization.")
+  }
+  
+  if(noreg){
+    rez <- noreg_cca(selected.Y = selected.Y, selected.X = selected.X,
+                     K = K, nperms = nperms, 
+                     return_cca_object = return_cca_object)
+    
+  } else {
+    rez <- reg_cca(selected.Y = selected.Y, selected.X = selected.X,
+                   K = K, nperms = nperms, 
+                   return_cca_object = return_cca_object)
+  }
+
   return(rez)
 }
 
