@@ -29,7 +29,7 @@ parser$add_argument('--noreg', action = 'store_true',
                     help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default).')
 
 
-#args <- parser$parse_args(c('--selectfun', 'drysdale3','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '100')) # 
+#args <- parser$parse_args(c('--selectfun', 'nofeatsel','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
@@ -42,6 +42,11 @@ SELECTION = args$selectfun
 NPERMS = args$innerperms
 K = args$k
 NOREG = args$noreg
+
+REGTYPE <- ''
+if(NOREG){
+  REGTYPE <- '-noreg-'
+}
 
 ##---------Load packages and import data-------
 
@@ -62,6 +67,14 @@ mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final im
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
   # of the two datasets to be the same (N=238)
 
+
+## No feature selection
+
+#Does what it says on the can.
+select_features_nofeatsel <- function(X, Y, n_selected_vars = NULL){
+  return(list(X = X, Y = Y))
+}
+
 ## Drysdale (2017) and Dinga (2019) method
 
 # From the 37,675 connectivity features (the lower diagonal of the
@@ -73,12 +86,6 @@ mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final im
 # Dinga retained the top 150 RS-fMRI features with the highest Spearman's 
 # correlation with any of the 17 IDS symptoms to preserve the same feature 
 # to subjects ratio (80% of 187 subjects).
-
-## No feature selection
-
-select_features_nofeatsel <- function(X, Y, n_selected_vars = NULL){
-  return(list(X = X, Y = Y))
-}
 
 select_features_drysdale <- function(X, Y, n_selected_vars = NULL){
   if(is.null(n_selected_vars)){
@@ -142,7 +149,9 @@ selectfun <- eval(parse(text = paste0('select_features_', SELECTION)))
 
 #cca funcitons
 
-noreg_cca <- function(...){
+noreg_cca <- function(selected.Y, selected.X,
+                      K, nperms, 
+                      return_cca_object){
   acca <- candisc::cancor(selected.X, selected.Y, ndim = K)
   rez <- list(penalty = NULL, cca_cors = acca$cancor)
   if(return_cca_object){
@@ -151,13 +160,15 @@ noreg_cca <- function(...){
   return(rez)
 }
 
-reg_cca <- function(...){
+reg_cca <- function(selected.Y, selected.X,
+                    K, nperms, 
+                    return_cca_object){
   #cca fit with best penalty
   penalties = seq(.1, .7, length.out = 10) #this is PMA::CCA.permute default
-  system.time(acca <- CCA.permute(selected.Y, selected.X, typex = 'standard', typez = 'standard', 
+  system.time(acca <- PMA::CCA.permute(selected.Y, selected.X, typex = 'standard', typez = 'standard', 
                                   penaltyxs = penalties, penaltyzs = penalties,
                                   nperms = nperms, trace = FALSE))
-  acca2 <- CCA(selected.Y, selected.X, K = K,
+  acca2 <- PMA::CCA(selected.Y, selected.X, K = K,
                typex = 'standard', typez = 'standard', 
                penaltyx = acca$bestpenaltyx,
                penaltyz = acca$bestpenaltyz, 
@@ -213,7 +224,7 @@ if(!args$nopermute){
       message('Running on NCF.
 Using ', NCPU, ' cores.
 This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
-      fname = file.path('data', paste0('cca_perms-', SELECTION, '-chunk_', CHUNK_ID, '.rds'))
+      fname = file.path('data', paste0('cca_perms-', SELECTION, REGTYPE, '-chunk_', CHUNK_ID, '.rds'))
       message('Output filename: ', fname)
       permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[CHUNK_ID]]
       message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
@@ -253,7 +264,7 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   saveRDS(rez, fname)
   message('Done permuting.')
 } else {
-  outfile <- file.path('data', paste0('cca-', SELECTION, '.rds'))
+  outfile <- file.path('data', paste0('cca-', SELECTION, REGTYPE, '.rds'))
   if(file.exists(outfile)){
     stop(outfile, ' exists. Will not recompute.')
   }
