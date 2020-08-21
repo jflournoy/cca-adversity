@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ccaperm-xia
+#SBATCH --job-name=ccaperm-nosel
 #SBATCH --output=log/%x_%A_%a.out
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=ncf

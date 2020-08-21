@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=ccaperm-drysdale3
+#SBATCH --job-name=ccaperm-d3
 #SBATCH --output=log/%x_%A_%a.out
 #SBATCH --time=2-00:00:00
 #SBATCH --partition=ncf

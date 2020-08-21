@@ -242,6 +242,7 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   parallel::clusterExport(cl = cl, 
                           varlist = c('mri_df', 'behavioral_df',
                                       'permutations', 'NPERMS', 
+                                      'K', 'NOREG',
                                       lsf.str()))
   message('Running permutations...')
   system.time({
