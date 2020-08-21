@@ -3,6 +3,7 @@
 
 library(argparse)
 library(PMA)
+library(candisc)
 library(readr)
 
 parser <- ArgumentParser(description='Run a simulation study using permediatr')
@@ -22,8 +23,13 @@ parser$add_argument('--permfile', type="character",default = 'permute_index.rds'
                     help = 'RDS file containing permutation matrix')
 parser$add_argument('--innerperms', type="integer",default = 1000,
                     help = 'Number of permutations for choosing penalty.')
+parser$add_argument('--k', type = 'integer', default = NULL, 
+                    help = 'Number of canonical variate pairs. Default will use min(p,q).')
+parser$add_argument('--noreg', action = 'store_true', 
+                    help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default)')
 
-#args <- parser$parse_args(c('--selectfun', 'drysdale','--mc.cores', '10', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '100')) # 
+
+#args <- parser$parse_args(c('--selectfun', 'drysdale3','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '100')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
@@ -34,6 +40,8 @@ CHUNK_ID = args$chunkid
 MAX_TASKS = args$maxchunks
 SELECTION = args$selectfun
 NPERMS = args$innerperms
+K = args$k
+NOREG = args$noreg
 
 ##---------Load packages and import data-------
 
@@ -52,7 +60,7 @@ behavioral_df <- merge(behavioral_df_all, sub_list, by = "ID", all = FALSE) # fi
 mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final imaging dataframe
   # Katherine: the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
-  # of the two datasets to be the same (N=236)
+  # of the two datasets to be the same (N=238)
 
 ## Drysdale (2017) and Dinga (2019) method
 
@@ -66,6 +74,12 @@ mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final im
 # correlation with any of the 17 IDS symptoms to preserve the same feature 
 # to subjects ratio (80% of 187 subjects).
 
+## No feature selection
+
+select_features_nofeatsel <- function(X, Y, n_selected_vars = NULL){
+  return(list(X = X, Y = Y))
+}
+
 select_features_drysdale <- function(X, Y, n_selected_vars = NULL){
   if(is.null(n_selected_vars)){
     total_n <- dim(X)[1]
@@ -76,7 +90,7 @@ select_features_drysdale <- function(X, Y, n_selected_vars = NULL){
   corr.threshold <- sort(correlations, decreasing = T)[n_selected_vars]
   selected.X <- correlations >= corr.threshold
   selected.X <- X[,selected.X]
-  return(selected.X)
+  return(list(X = selected.X, Y = Y))
 }
 
 select_features_drysdale2 <- function(X, Y, n_selected_vars = NULL){
@@ -85,7 +99,23 @@ select_features_drysdale2 <- function(X, Y, n_selected_vars = NULL){
     n_selected_vars <- round(.20*total_p)
   }
   selected.X <- select_features_drysdale(X, Y, n_selected_vars = n_selected_vars)
-  return(selected.X)
+  return(list(X = selected.X, Y = Y))
+}
+
+select_features_drysdale3 <- function(X, Y, n_selected_vars = 100){
+  #Select the top N highly correlated features on both sides, to be submitted to
+  #a non-regularized CCA.
+  
+  #select X (MRI vars)
+  correlations <- cor(X, Y, method = "spearman")
+  correlations_max.X <- apply(correlations, 1, function(x){max(abs(x))})
+  correlations_max.Y <- apply(correlations, 2, function(x){max(abs(x))})
+  selected.X.names <- names(sort(correlations_max.X, decreasing = T)[1:n_selected_vars])
+  selected.Y.names <- names(sort(correlations_max.Y, decreasing = T)[1:n_selected_vars])
+  selected.X <- X[, selected.X.names]
+  selected.Y <- Y[, selected.Y.names]
+  
+  return(list(X = selected.X, Y = selected.Y))
 }
 
 ## Xia et al. (2018) method
@@ -105,22 +135,30 @@ select_features_xia <- function(X, Y, n_selected_vars = NULL){
   mads.threshold <- sort(mads, decreasing = T)[n_selected_vars]
   selected.X <- mads >= mads.threshold
   selected.X <- X[,selected.X]
-  return(selected.X)
+  return(list(X = selected.X, Y = Y))
 }
 
 selectfun <- eval(parse(text = paste0('select_features_', SELECTION)))
 
 # Select features + CCA function
 
-select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = FALSE, nperms = 1000){
+select_and_cca_fit <- function(X, Y, K, selection_function, return_cca_object = FALSE, nperms = 1000, noreg = FALSE){
   #select features
-  selected.X <- selection_function(X, Y)
+  selected_features <- selection_function(X, Y)
+  selected.X <- selected_features[['X']]
+  selected.Y <- selected_features[['Y']]
+  
+  if(is.null(K)){
+    K <- min(dim(selected.X)[2], dim(selected.Y)[2])
+  }
+  
+  
   #cca fit with best penalty
   penalties = seq(.1, .7, length.out = 10) #this is PMA::CCA.permute default
-  system.time(acca <- CCA.permute(Y, selected.X, typex = 'standard', typez = 'standard', 
+  system.time(acca <- CCA.permute(selected.Y, selected.X, typex = 'standard', typez = 'standard', 
                                   penaltyxs = penalties, penaltyzs = penalties,
                                   nperms = nperms, trace = FALSE))
-  acca2 <- CCA(Y, selected.X, K = K,
+  acca2 <- CCA(selected.Y, selected.X, K = K,
                typex = 'standard', typez = 'standard', 
                penaltyx = acca$bestpenaltyx,
                penaltyz = acca$bestpenaltyz, 
@@ -175,8 +213,9 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
         perm <- permutations[i,]
         cca_output <- select_and_cca_fit(X = mri_df[perm, 2:ncol(mri_df)],
                                          Y = behavioral_df[,2:ncol(behavioral_df)],
-                                         K = 10, nperms = NPERMS,
-                                         selection_function = selectfun)
+                                         K = K, nperms = NPERMS,
+                                         selection_function = selectfun,
+                                         noreg = NOREG)
         return(cca_output)
       })
   })
@@ -194,9 +233,10 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   system.time(
     cca_rez <- select_and_cca_fit(X = mri_df[, 2:ncol(mri_df)],
                                   Y = behavioral_df[, 2:ncol(behavioral_df)],
-                                  K = 10, nperms = NPERMS,
+                                  K = K, nperms = NPERMS,
                                   selection_function = selectfun,
-                                  return_cca_object = TRUE)
+                                  return_cca_object = TRUE,
+                                  noreg = NOREG)
   )
   message('Saving result to ', outfile)
   saveRDS(cca_rez, outfile)
