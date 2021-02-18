@@ -29,8 +29,12 @@ parser$add_argument('--noreg', action = 'store_true',
                     help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default).')
 parser$add_argument('--behfeatures', type="character", required = TRUE,
                     help = 'csv file with behavioral features')
+parser$add_argument('--behsuffix', type="character", required = TRUE,
+                    help = 'add this to the output filenames')
+parser$add_argument('--behfeaturesID', type="character", default = 'ID',
+                    help = 'ID column for this file')
 
-#args <- parser$parse_args(c('--selectfun', 'nofeatsel','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25', '--behfeatures', 'data/behavior_data.csv')) # 
+#args <- parser$parse_args(c('--selectfun', 'drysdale3', '--noreg', '--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25', '--behfeatures', 'data/cca_psy_items.csv', '--behfeaturesID', 'id', '--nopermute', '--behsuffix', 'psy')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
@@ -44,11 +48,13 @@ NPERMS = args$innerperms
 K = args$k
 NOREG = args$noreg
 BEHFEATFILE = args$behfeatures
+BEHSUFFIX = args$behsuffix
+IDCOL = args$behfeaturesID
 
 #for file naming, later
 REGTYPE <- ''
 if(NOREG){
-  REGTYPE <- '-noreg-'
+  REGTYPE <- '-noreg'
 }
 
 ##---------Load packages and import data-------
@@ -62,10 +68,11 @@ sub_list_MT <- read.csv("subject_lists/Rest_MT-CCA_n121.csv")
 
 # Retain participants who have clean scan data from Steph's QC
 sub_list <- rbind(sub_list_DT, sub_list_MT)
-names(sub_list)[1] <- "ID"
+names(sub_list)[1] <- IDCOL
+names(mri_df_all)[which(names(mri_df_all) == 'ID')] <- IDCOL
 
-behavioral_df <- merge(behavioral_df_all, sub_list, by = "ID", all = FALSE) # final behavioral dataframe
-mri_df <- merge(mri_df_all, behavioral_df[1], by = "ID", all = FALSE) # final imaging dataframe
+behavioral_df <- merge(behavioral_df_all, sub_list, by = IDCOL, all = FALSE) # final behavioral dataframe
+mri_df <- merge(mri_df_all, behavioral_df[1], by = IDCOL, all = FALSE) # final imaging dataframe
   # Katherine: the reason I merged mri_df_all with behavioral_df instead of sub_list is because there are apparently two
   # subjects who completed the scan but not the behavioral data. So this way of merging makes the dimensions
   # of the two datasets to be the same (N=238)
@@ -227,7 +234,7 @@ if(!args$nopermute){
       message('Running on NCF.
 Using ', NCPU, ' cores.
 This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
-      fname = file.path('data', paste0('cca_perms-', SELECTION, REGTYPE, '-chunk_', CHUNK_ID, '.rds'))
+      fname = file.path('data', paste0('cca_perms-', BEHSUFFIX, '-', SELECTION, REGTYPE, '-chunk_', CHUNK_ID, '.rds'))
       message('Output filename: ', fname)
       permutations_i <- split(1:dim(permutations)[1], f = 1:MAX_TASKS)[[CHUNK_ID]]
       message('Running ', length(permutations_i), ' of ', dim(permutations)[1], ' permutations...')
@@ -268,7 +275,7 @@ This is chunk ', CHUNK_ID,' of ', MAX_TASKS, '.')
   saveRDS(rez, fname)
   message('Done permuting.')
 } else {
-  outfile <- file.path('data', paste0('cca-', SELECTION, REGTYPE, '.rds'))
+  outfile <- file.path('data', paste0('cca-', BEHSUFFIX, '-', SELECTION, REGTYPE, '.rds'))
   if(file.exists(outfile)){
     stop(outfile, ' exists. Will not recompute.')
   }
