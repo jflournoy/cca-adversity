@@ -6,7 +6,7 @@ library(PMA)
 library(candisc)
 library(readr)
 
-parser <- ArgumentParser(description='Run a simulation study using permediatr')
+parser <- ArgumentParser(description='Run CCA analysis')
 parser$add_argument('--nopermute', action = 'store_true', help = 'Run the CCA on the unpermuted observed data and save the result. Do not run any permutations (this CCA will not be computed on unpermuted data when running permutations).')
 parser$add_argument('--useraw', action = 'store_true', help = 'Use the un-residualized, raw data for X and Y. Otherwise, we will use data residualized on Age and Sex. (NOT YET IMPLEMENTED)')
 parser$add_argument('--selectfun', type="character", required = TRUE,
