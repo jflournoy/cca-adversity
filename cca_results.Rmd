@@ -12,7 +12,7 @@ library(ggplot2)
 library(candisc)
 knitr::opts_chunk$set(echo = TRUE)
 
-dens_plot <- function(null_ccs, Z_table, xlim = c(0,1), label_h = 9, text_offset = .075){
+dens_plot <- function(null_ccs, Z_table, xlim = c(0,1), label_h = 9, text_offset = .075, nudge_x = -.025){
   lt <- 'solid'
   segalpha <- 1
   segcol <- '#bb6a23'
@@ -28,7 +28,7 @@ dens_plot <- function(null_ccs, Z_table, xlim = c(0,1), label_h = 9, text_offset
     geom_point(data = Z_table, aes(x = cc_obs, y = 0), color = segcol, fill = dotfill, shape = 21, size = 2.5) + 
     # geom_point(data = Z_table, aes(x = cc_obs - text_offset, y = label_h), color = '#2a5078', shape = 18) + 
     geom_text(data = Z_table, aes(label = sprintf('Z = %.2f', Z), x = cc_obs - text_offset, y = label_h), 
-              hjust = 1, vjust = .5, nudge_x = -.025, nudge_y = 0, size = 3,
+              hjust = 1, vjust = .5, nudge_x = nudge_x, nudge_y = 0, size = 3,
               color = '#444444',
               family = 'NimbusSanCond') + 
     theme_minimal() + 
@@ -190,7 +190,7 @@ Z_table <- null_ccs[cc, on = 'k'][, list(prop_null_lt_obs = mean(cc < cc_obs),
 
 ```{r, fig.width=10, fig.height=4,fig.cap='Density of canonical correlations (CC) on permuted data for each of 10 canonical variates in order. Lines indicate CC of unpermuted data with Z scores for their location in the null density. X axis starts at r=.90.'}
 #https://www.instagram.com/p/B_fRZQzgsnc/
-dens_plot(null_ccs = null_ccs[k <= 10], Z_table = Z_table[k <= 10], xlim = c(.9, 1), label_h = 30, text_offset = .0075)
+dens_plot(null_ccs = null_ccs[k <= 10], Z_table = Z_table[k <= 10], xlim = c(.9, 1), label_h = 50, text_offset = .02, nudge_x = -.0025)
 ```
 
 ```{r}
@@ -208,7 +208,7 @@ No pre-selection of features.
 ## Load permutations
 
 ```{r}
-perms_list <- lapply(dir('data/old', pattern = 'cca_perms-nofeatsel-chunk_.*rds', full.names = TRUE), readRDS)
+perms_list <- lapply(dir('data', pattern = 'cca_perms-nofeatsel-chunk_.*rds', full.names = TRUE), readRDS)
 
 #The optimal penalty for each permuted data set
 penalties <- unlist(lapply(perms_list, function(permset){
@@ -231,7 +231,7 @@ null_ccs[, mean := mean(cc), by = k]
 ## Load CCA of observed data
 
 ```{r}
-cca_obsv <- readRDS(file.path('data/old', 'cca-nofeatsel.rds'))
+cca_obsv <- readRDS(file.path('data', 'cca-nofeatsel.rds'))
 cca_penalty_used <- cca_obsv$cca.permute_obj$bestpenaltyx
 cc <- data.frame(cc_obs = cca_obsv$cca_obj$cors, 
                  k = 1:length(cca_obsv$cca_obj$cors))
