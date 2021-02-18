@@ -27,9 +27,10 @@ parser$add_argument('--k', type = 'integer', default = NULL,
                     help = 'Number of canonical variate pairs. Default will use min(p,q).')
 parser$add_argument('--noreg', action = 'store_true', 
                     help = 'Use vanilla CCA from the candisc package, rather than regularized CCA (the default).')
+parser$add_argument('--behfeatures', type="character", required = TRUE,
+                    help = 'csv file with behavioral features')
 
-
-#args <- parser$parse_args(c('--selectfun', 'nofeatsel','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25')) # 
+#args <- parser$parse_args(c('--selectfun', 'nofeatsel','--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25', '--behfeatures', 'data/behavior_data.csv')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
@@ -42,7 +43,9 @@ SELECTION = args$selectfun
 NPERMS = args$innerperms
 K = args$k
 NOREG = args$noreg
+BEHFEATFILE = args$behfeatures
 
+#for file naming, later
 REGTYPE <- ''
 if(NOREG){
   REGTYPE <- '-noreg-'
@@ -50,7 +53,7 @@ if(NOREG){
 
 ##---------Load packages and import data-------
 
-behavioral_df_all <- data.frame(readr::read_csv('data/behavior_data_resid.csv'))
+behavioral_df_all <- data.frame(readr::read_csv(BEHFEATFILE))
 mri_df_all <- readRDS('data/rsfc_data_resid.rds')
 sub_list_DT <- read.csv("subject_lists/Rest_DT-CCA_n118.csv")
 sub_list_MT <- read.csv("subject_lists/Rest_MT-CCA_n121.csv")
@@ -105,8 +108,8 @@ select_features_drysdale2 <- function(X, Y, n_selected_vars = NULL){
     total_p <- dim(X)[2]
     n_selected_vars <- round(.20*total_p)
   }
-  selected.X <- select_features_drysdale(X, Y, n_selected_vars = n_selected_vars)
-  return(list(X = selected.X, Y = Y))
+  selected <- select_features_drysdale(X, Y, n_selected_vars = n_selected_vars)
+  return(selected)
 }
 
 select_features_drysdale3 <- function(X, Y, n_selected_vars = 100){
