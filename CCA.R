@@ -34,7 +34,7 @@ parser$add_argument('--behsuffix', type="character", required = TRUE,
 parser$add_argument('--behfeaturesID', type="character", default = 'ID',
                     help = 'ID column for this file')
 
-#args <- parser$parse_args(c('--selectfun', 'drysdale3', '--noreg', '--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25', '--behfeatures', 'data/cca_psy_items.csv', '--behfeaturesID', 'id', '--nopermute', '--behsuffix', 'psy')) # 
+#args <- parser$parse_args(c('--selectfun', 'xia', '--mc.cores', '4', '--chunkid', '1', '--maxchunks', '1000',  '--innerperms', '25', '--behfeatures', 'data/behavior_data_resid.csv', '--behfeaturesID', 'ID', '--nopermute', '--behsuffix', 'psy')) # 
 args <- parser$parse_args()
 NCPU = args$mc.cores
 if(!is.na(as.numeric(Sys.getenv('SLURM_CPUS_ON_NODE'))) & 
