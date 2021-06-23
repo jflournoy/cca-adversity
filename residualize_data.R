@@ -1,6 +1,6 @@
 library(readr)
 library(data.table)
-setDTthreads(threads = 0)
+setDTthreads(threads = 1)
 getDTthreads()
 
 make_resid <- function(y, controls){
@@ -10,7 +10,10 @@ make_resid <- function(y, controls){
   return(r)
 }
 
-behavioral_df_all <- data.table(data.frame(readr::read_csv('data/behavior_data.csv')))
+#BEHFNAME <- 'data/behavior_data.csv'
+BEHFNAME <- 'data/cca_psy.csv'
+
+behavioral_df_all <- data.table(data.frame(readr::read_csv(BEHFNAME)))
 
 mri_df_all <- data.table(readRDS('data/rsfc_data.rds'))
 mri_df_all[, ID := as.numeric(ID)]
@@ -40,5 +43,7 @@ for(col in bcols){
 
 db_out <- db[, mget(names(behavioral_df_all))]
 
-readr::write_csv(db_out, file.path('data', 'behavior_data_resid.csv'))
+OUTBEHFNAME <- gsub('\\.csv', '_resid.csv', BEHFNAME)
+
+readr::write_csv(db_out, OUTBEHFNAME)
 saveRDS(data.frame(dm_out), file.path('data', 'rsfc_data_resid.rds'))
